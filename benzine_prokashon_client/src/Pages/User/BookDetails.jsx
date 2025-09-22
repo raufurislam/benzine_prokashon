@@ -1,3 +1,4 @@
+/* eslint-disable no-unused-vars */
 import React, { useEffect, useState, useMemo } from "react";
 import { Book, ShoppingCart, FileText, AlertCircle } from "lucide-react";
 import useAxiosPublic from "../../Hooks/useAxiosPublic";
@@ -36,6 +37,7 @@ const BookDetails = () => {
       try {
         setLoading(true);
         const response = await axiosPublic.get(`/books/${id}`);
+        console.log(response);
         setBook(response.data);
       } catch (err) {
         console.error("Error fetching book details:", err);
