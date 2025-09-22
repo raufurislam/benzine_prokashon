@@ -2,6 +2,7 @@ require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
 const jwt = require("jsonwebtoken");
+const moment = require("moment-timezone");
 
 const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 
@@ -247,17 +248,33 @@ async function run() {
     // });
 
     // Convert UTC → BD time
-    function getBangladeshTime(date = new Date()) {
-      const utc = date.getTime() + date.getTimezoneOffset() * 60000;
-      const bdOffset = 6 * 60 * 60 * 1000; // +6 hours
-      return new Date(utc + bdOffset);
+
+    function getBDStartOfDay(date = new Date()) {
+      return moment.tz(date, "Asia/Dhaka").startOf("day").toDate();
     }
 
-    // Convert BD → UTC (reverse shift)
-    function bdToUtc(date) {
-      return new Date(date.getTime() - 6 * 60 * 60 * 1000);
+    function getBDEndOfDay(date = new Date()) {
+      return moment.tz(date, "Asia/Dhaka").endOf("day").toDate();
     }
 
+    function getBDStartOfMonth(date = new Date()) {
+      return moment.tz(date, "Asia/Dhaka").startOf("month").toDate();
+    }
+
+    function getBDEndOfMonth(date = new Date()) {
+      return moment.tz(date, "Asia/Dhaka").endOf("month").toDate();
+    }
+
+    function getBDStartOfYear(date = new Date()) {
+      return moment.tz(date, "Asia/Dhaka").startOf("year").toDate();
+    }
+
+    function getBDEndOfYear(date = new Date()) {
+      return moment.tz(date, "Asia/Dhaka").endOf("year").toDate();
+    }
+    // ==========================
+    // API
+    // ==========================
     app.get("/sell-items", verifyToken, verifyAdmin, async (req, res) => {
       try {
         const {
@@ -277,63 +294,27 @@ async function run() {
           filter.sellerEmail = sellerEmail;
         }
 
-        const now = getBangladeshTime(); // always BD time
+        const now = new Date();
 
         if (period === "day") {
-          const bdStart = new Date(
-            now.getFullYear(),
-            now.getMonth(),
-            now.getDate(),
-            0,
-            0,
-            0,
-            0
-          );
-          const bdEnd = new Date(
-            now.getFullYear(),
-            now.getMonth(),
-            now.getDate() + 1,
-            0,
-            0,
-            0,
-            0
-          );
-
-          filter.createdAt = { $gte: bdToUtc(bdStart), $lt: bdToUtc(bdEnd) };
+          filter.createdAt = {
+            $gte: getBDStartOfDay(now),
+            $lt: getBDEndOfDay(now),
+          };
         } else if (period === "month") {
-          const bdStart = new Date(
-            now.getFullYear(),
-            now.getMonth(),
-            1,
-            0,
-            0,
-            0,
-            0
-          );
-          const bdEnd = new Date(
-            now.getFullYear(),
-            now.getMonth() + 1,
-            1,
-            0,
-            0,
-            0,
-            0
-          );
-
-          filter.createdAt = { $gte: bdToUtc(bdStart), $lt: bdToUtc(bdEnd) };
+          filter.createdAt = {
+            $gte: getBDStartOfMonth(now),
+            $lt: getBDEndOfMonth(now),
+          };
         } else if (period === "year") {
-          const bdStart = new Date(now.getFullYear(), 0, 1, 0, 0, 0, 0);
-          const bdEnd = new Date(now.getFullYear() + 1, 0, 1, 0, 0, 0, 0);
-
-          filter.createdAt = { $gte: bdToUtc(bdStart), $lt: bdToUtc(bdEnd) };
+          filter.createdAt = {
+            $gte: getBDStartOfYear(now),
+            $lt: getBDEndOfYear(now),
+          };
         } else if (period === "custom" && startDate && endDate) {
-          const bdStart = new Date(startDate);
-          bdStart.setHours(0, 0, 0, 0);
-
-          const bdEnd = new Date(endDate);
-          bdEnd.setHours(23, 59, 59, 999);
-
-          filter.createdAt = { $gte: bdToUtc(bdStart), $lte: bdToUtc(bdEnd) };
+          const bdStart = getBDStartOfDay(new Date(startDate));
+          const bdEnd = getBDEndOfDay(new Date(endDate));
+          filter.createdAt = { $gte: bdStart, $lte: bdEnd };
         }
 
         const totalCount = await sellsCollection.countDocuments(filter);
@@ -390,45 +371,28 @@ async function run() {
       try {
         const { period, startDate, endDate } = req.query;
 
-        let startBD, endBD;
+        let start, end;
 
         if (startDate && endDate) {
-          // Custom range (BD local)
-          startBD = new Date(startDate);
-          startBD.setHours(0, 0, 0, 0);
-
-          endBD = new Date(endDate);
-          endBD.setHours(23, 59, 59, 999);
+          // Custom range
+          start = getBDStartOfDay(new Date(startDate));
+          end = getBDEndOfDay(new Date(endDate));
         } else {
-          // Always use BD local time
-          const nowBD = getBangladeshTime();
+          const now = new Date();
 
           if (period === "day") {
-            startBD = new Date(nowBD);
-            startBD.setHours(0, 0, 0, 0);
-
-            endBD = new Date(nowBD);
-            endBD.setHours(23, 59, 59, 999);
+            start = getBDStartOfDay(now);
+            end = getBDEndOfDay(now);
           } else if (period === "month") {
-            startBD = new Date(nowBD.getFullYear(), nowBD.getMonth(), 1);
-            startBD.setHours(0, 0, 0, 0);
-
-            endBD = new Date(nowBD.getFullYear(), nowBD.getMonth() + 1, 0);
-            endBD.setHours(23, 59, 59, 999);
+            start = getBDStartOfMonth(now);
+            end = getBDEndOfMonth(now);
           } else if (period === "year") {
-            startBD = new Date(nowBD.getFullYear(), 0, 1);
-            startBD.setHours(0, 0, 0, 0);
-
-            endBD = new Date(nowBD.getFullYear(), 11, 31);
-            endBD.setHours(23, 59, 59, 999);
+            start = getBDStartOfYear(now);
+            end = getBDEndOfYear(now);
           } else {
             return res.status(400).json({ message: "Invalid period" });
           }
         }
-
-        // 🔑 Convert BD range → UTC range for MongoDB
-        const start = bdToUtc(startBD);
-        const end = bdToUtc(endBD);
 
         const pipeline = [
           { $match: { createdAt: { $gte: start, $lte: end } } },

@@ -76,7 +76,7 @@ const CartPage = () => {
                   <img
                     src={item.coverImage}
                     alt={item.productNameBn}
-                    className="w-16 h-20 object-cover mr-4"
+                    className="w-16 object-cover mr-4"
                   />
                   <div>
                     <h3 className="font-semibold">{item.productNameBn}</h3>
